@@ -23,6 +23,7 @@ limitations under the License.
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -1537,6 +1538,41 @@ TfLiteStatus DelegatePrepare(TfLiteContext* context, TfLiteDelegate* delegate) {
   if (!cl::OpenCLSupported()) {
     excluded_ops.insert(kTfLiteBuiltinSplit);
     excluded_ops.insert(kTfLiteBuiltinSplitV);
+  }
+  // VoiceMemo's source-built GPU probe uses this diagnostic-only hook to
+  // isolate operation families without rewriting the decoder graph. It is
+  // inactive unless the probe explicitly supplies a comma-separated list of
+  // numeric TfLiteBuiltinOperator values.
+  const char* diagnostic_exclusions =
+      std::getenv("VOICEMEMO_GPU_EXCLUDED_BUILTINS");
+  if (diagnostic_exclusions != nullptr && diagnostic_exclusions[0] != '\0') {
+    const std::string values(diagnostic_exclusions);
+    size_t start = 0;
+    while (start <= values.size()) {
+      const size_t separator = values.find(',', start);
+      const std::string value =
+          values.substr(start, separator == std::string::npos
+                                   ? std::string::npos
+                                   : separator - start);
+      int builtin_code = -1;
+      if (!absl::SimpleAtoi(value, &builtin_code) || builtin_code < 0) {
+        TF_LITE_KERNEL_LOG(
+            context,
+            "Ignoring invalid VoiceMemo diagnostic GPU exclusion: %s",
+            value.c_str());
+      } else {
+        excluded_ops.insert(
+            static_cast<TfLiteBuiltinOperator>(builtin_code));
+      }
+      if (separator == std::string::npos) {
+        break;
+      }
+      start = separator + 1;
+    }
+    TF_LITE_KERNEL_LOG(
+        context,
+        "VoiceMemo diagnostic GPU exclusions: %s",
+        diagnostic_exclusions);
   }
 #ifndef TFLITE_DEBUG_DELEGATE
   TfLiteIntArray* ops_to_replace =

@@ -302,7 +302,9 @@ void ConvGeneric::GenerateCode(const GpuInfo& gpu_info) {
     compiler_options_.push_back(CompilerOptions::kClFastRelaxedMath);
   }
   if (gpu_info.IsMali()) {
-    compiler_options_.push_back(CompilerOptions::kClFastRelaxedMath);
+    if (definition_.precision != CalculationsPrecision::F32) {
+      compiler_options_.push_back(CompilerOptions::kClFastRelaxedMath);
+    }
     compiler_options_.push_back(CompilerOptions::kClRegisterAllocation64);
   }
   if (conv_params_.IsPrivateMemBroadcast() &&
